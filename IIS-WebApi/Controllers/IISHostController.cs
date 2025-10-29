@@ -5,9 +5,8 @@ namespace IIS_WebApi.Controllers;
 [Route("api/iis-host")]
 [ApiController]
 [Produces("application/json")]
-public class IISHostController(IWebHostEnvironment env) : ControllerBase
+public class IISHostController : ControllerBase
 {
-    private readonly IWebHostEnvironment _env = env;
 
     /// <summary>
     /// Get IIS server status
@@ -30,18 +29,8 @@ public class IISHostController(IWebHostEnvironment env) : ControllerBase
     {
         var partnersRoot = GetPartnersRootPath();
 
-        // Return debug info if no partners folder found
         if (partnersRoot == null)
-        {
-            return Ok(new
-            {
-                Error = "Partners folder not found",
-                _env.ContentRootPath,
-                _env.WebRootPath,
-                AppDomain.CurrentDomain.BaseDirectory,
-                CurrentDirectory = Directory.GetCurrentDirectory()
-            });
-        }
+            return Ok(Array.Empty<object>());
 
         var partners = Directory.GetDirectories(partnersRoot)
             .Select(pDir => new
@@ -80,12 +69,18 @@ public class IISHostController(IWebHostEnvironment env) : ControllerBase
         if (!Directory.Exists(terminalPath))
             return NotFound();
 
-        var zipNames = Directory.GetFiles(terminalPath, "*.zip")
-            .Select(Path.GetFileName)
-            .OrderBy(n => n)
+        var zipFiles = Directory.GetFiles(terminalPath, "*.zip")
+            .Select(filePath => new FileInfo(filePath))
+            .Select((file, index) => new
+            {
+                Id = index + 1,
+                file.Name,
+                CreatedDateTime = file.CreationTime
+            })
+            .OrderByDescending(f => f.CreatedDateTime)
             .ToArray();
 
-        return Ok(zipNames);
+        return Ok(zipFiles);
     }
 
     /// <summary>
@@ -126,16 +121,9 @@ public class IISHostController(IWebHostEnvironment env) : ControllerBase
         return PhysicalFile(path, "application/zip", fileName);
     }
 
-    private string? GetPartnersRootPath()
+    private static string? GetPartnersRootPath()
     {
-        var possiblePaths = new[]
-        {
-            Path.Combine(_env.ContentRootPath, "partners"),
-            Path.Combine(_env.WebRootPath ?? _env.ContentRootPath, "partners"),
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "partners"),
-            Path.Combine(Directory.GetCurrentDirectory(), "partners")
-        };
-
-        return possiblePaths.FirstOrDefault(Directory.Exists);
+        var partnersPath = @"C:\Ilyas\New folder\IIS-Host\IIS-WebApi\partners";
+        return Directory.Exists(partnersPath) ? partnersPath : null;
     }
 }

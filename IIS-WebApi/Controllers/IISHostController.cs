@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace IIS_WebApi.Controllers;
 
-[Route("api/[controller]")]
+[Route("api/iis-host")]
 [ApiController]
 [Produces("application/json")]
 public class IISHostController(IWebHostEnvironment env) : ControllerBase
@@ -28,10 +28,19 @@ public class IISHostController(IWebHostEnvironment env) : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult GetPartnersTerminals()
     {
-        var partnersRoot = Path.Combine(_env.ContentRootPath, "partners");
-        if (!Directory.Exists(partnersRoot))
+        var partnersRoot = GetPartnersRootPath();
+
+        // Return debug info if no partners folder found
+        if (partnersRoot == null)
         {
-            return Ok(Array.Empty<object>());
+            return Ok(new
+            {
+                Error = "Partners folder not found",
+                _env.ContentRootPath,
+                _env.WebRootPath,
+                AppDomain.CurrentDomain.BaseDirectory,
+                CurrentDirectory = Directory.GetCurrentDirectory()
+            });
         }
 
         var partners = Directory.GetDirectories(partnersRoot)
@@ -63,7 +72,11 @@ public class IISHostController(IWebHostEnvironment env) : ControllerBase
         if (string.IsNullOrWhiteSpace(partnerId) || string.IsNullOrWhiteSpace(terminalId))
             return NotFound();
 
-        var terminalPath = Path.Combine(_env.ContentRootPath, "partners", partnerId, terminalId);
+        var partnersRoot = GetPartnersRootPath();
+        if (partnersRoot == null)
+            return NotFound();
+
+        var terminalPath = Path.Combine(partnersRoot, partnerId, terminalId);
         if (!Directory.Exists(terminalPath))
             return NotFound();
 
@@ -91,8 +104,12 @@ public class IISHostController(IWebHostEnvironment env) : ControllerBase
         if (string.IsNullOrWhiteSpace(partnerId) || string.IsNullOrWhiteSpace(terminalId) || string.IsNullOrWhiteSpace(zipName))
             return NotFound();
 
+        var partnersRoot = GetPartnersRootPath();
+        if (partnersRoot == null)
+            return NotFound();
+
         var fileName = Path.GetFileName(zipName);
-        var folder = Path.Combine(_env.ContentRootPath, "partners", partnerId, terminalId);
+        var folder = Path.Combine(partnersRoot, partnerId, terminalId);
         if (!Directory.Exists(folder)) return NotFound();
 
         var path = Path.Combine(folder, fileName);
@@ -107,5 +124,18 @@ public class IISHostController(IWebHostEnvironment env) : ControllerBase
         }
 
         return PhysicalFile(path, "application/zip", fileName);
+    }
+
+    private string? GetPartnersRootPath()
+    {
+        var possiblePaths = new[]
+        {
+            Path.Combine(_env.ContentRootPath, "partners"),
+            Path.Combine(_env.WebRootPath ?? _env.ContentRootPath, "partners"),
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "partners"),
+            Path.Combine(Directory.GetCurrentDirectory(), "partners")
+        };
+
+        return possiblePaths.FirstOrDefault(Directory.Exists);
     }
 }
